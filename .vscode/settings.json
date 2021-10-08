@@ -2,6 +2,7 @@
     "C_Cpp.errorSquiggles": "Enabled",
     "workbench.colorTheme": "Dracula",
     "files.associations": {
-        "vector": "cpp"
+        "vector": "cpp",
+        "locale": "cpp"
     }
 }

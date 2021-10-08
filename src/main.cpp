@@ -5,9 +5,7 @@
 #include <vector>
 
 Timer<10> timer;
-std::vector<int> RunCommandBuffer;
-
-void Run();
+std::vector<long> RunCommandBuffer;
 
 SoftwareSerial bluetooth(2, 3); // RX, TX
 void setup()
@@ -24,46 +22,57 @@ void setup()
     pinMode(6, OUTPUT);
 }
 
-bool activateMotor (void *) {
+void activateMotor () {
     digitalWrite(6, HIGH);
-    return false;
 }
 
-bool deactivateMotor (void *) {
+void deactivateMotor () {
     digitalWrite(6, LOW);
-
-    RunCommandBuffer.pop_back();
-    if (RunCommandBuffer.size() > 0) Run();
-
-    return false;
 }
 
-void Run () {
-    int time = RunCommandBuffer.at(RunCommandBuffer.size() - 1);
+bool continueToRunIfMoreCommand(void *);
+void runCar (long time) {
+    char tbs[60];
+    sprintf(tbs, "> Starting Run for time: %lu ms", time);
+    Serial.println(tbs);
 
-    Serial.print("Time: ");
-    Serial.print(time);
-    Serial.print("\n");
+    activateMotor();
+    timer.in(time, continueToRunIfMoreCommand);
+}
 
-    activateMotor(NULL);
-    timer.in(time, deactivateMotor);
+bool continueToRunIfMoreCommand(void *) {
+    Serial.println("> Finished a run");
+    RunCommandBuffer.pop_back();
+    if (RunCommandBuffer.size() > 0) {
+        long time = RunCommandBuffer.at(RunCommandBuffer.size() - 1);
+        runCar(time);
+    }
+    else deactivateMotor();
+
+    return false;
 }
 
 // Command example:  CAR+RUN:15
 void handleBluetoothCommands(String command)
 {
-    DynamicJsonDocument doc(1024);
+    StaticJsonDocument<256> doc;
     deserializeJson(doc, command);
     const char* commandType = doc["command"];
 
-    Serial.println(commandType);
-
     if (strcmp(commandType, "RUN") == 0) 
     {
-        const int time = (doc["time"] ? doc["time"] : 10)*1000;
-        RunCommandBuffer.insert(RunCommandBuffer.begin(), time);
+        long docTime = doc["time"];
+        if (docTime > 0) {
+            long timeInSeconds = docTime;
+            long timeInMs = timeInSeconds * 1000;
+            RunCommandBuffer.insert(RunCommandBuffer.begin(), timeInMs);
+            
+            char tbs[60];
+            sprintf(tbs, "* Added Run time: %lu ms", timeInMs);
+            Serial.println(tbs);
 
-        if (RunCommandBuffer.size() == 1) Run();
+            if (RunCommandBuffer.size() == 1) runCar(timeInMs);
+        }
     }
 }
 
