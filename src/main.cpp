@@ -17,12 +17,14 @@
 
 Timer<10> timer;
 std::vector<long> RunCommandBuffer;
+int builtInLedVal = LOW;
 
 SoftwareSerial bluetooth(2, 3); // RX, TX
 
-// Functions
-
 bool shouldCarRun = false;
+bool isTestEnabled = false;
+
+// Functions
 
 void activateMotor() { shouldCarRun = true; }
 void deactivateMotor() { shouldCarRun = false; }
@@ -53,7 +55,6 @@ bool continueToRunIfMoreCommand(void *)
     return false;
 }
 
-// Command example:  CAR+RUN:15
 void handleBluetoothCommands(String command)
 {
     StaticJsonDocument<256> doc;
@@ -77,10 +78,34 @@ void handleBluetoothCommands(String command)
                 runCar(timeInMs);
         }
     }
+    else if (strcmp(commandType, "LED") == 0) {
+        builtInLedVal = !builtInLedVal;
+        digitalWrite(LED_BUILTIN, builtInLedVal);
+    }
+    else if (strcmp(commandType, "TEST") == 0) {
+        bool value = doc["value"];
+        isTestEnabled = value;
+    }
+    else if (strcmp(commandType, "WHEEL") == 0) {
+        isTestEnabled = true;
+        Serial.println("* Changing Motor");
+
+        bool bLeftWheel = doc["left"];
+        bool bRightWheel = doc["right"];
+
+        char tbs[60];
+        sprintf(tbs, "* Motor = left: %d, right: %d", bLeftWheel, bRightWheel);
+        Serial.println(tbs);
+
+        digitalWrite(LEFT_WHEEL_PIN, bLeftWheel);
+        digitalWrite(RIGHT_WHEEL_PIN, bRightWheel);
+    }
 }
 
 bool checkLdrForWheels(void *)
 {
+    if (isTestEnabled) return true; // validation
+
     int leftSensor = analogRead(LEFT_LDR_SENSOR_PIN);
     int rightSensor = analogRead(RIGHT_LDR_SENSOR_PIN);
 
@@ -89,19 +114,19 @@ bool checkLdrForWheels(void *)
     sprintf(tbs, "leftSensor: %d | rightSensor: %d;", leftSensor, rightSensor);
     Serial.println(tbs);
 
-    int margin = 50;
-    if (true)
-    { // shouldCarRun) {
+    int margin = 25;
+    if (shouldCarRun)
+    {
         bool bLeftWheel = false;
         bool bRightWheel = false;
 
         if (leftSensor - rightSensor > margin)
         { 
-            bLeftWheel = true;
+            bRightWheel = true;
         }
         else if (rightSensor - leftSensor > margin)
         {
-            bRightWheel = true;
+            bLeftWheel = true;
         }
         else
         {
@@ -135,7 +160,7 @@ void setup()
 
     // Led
     pinMode(6, OUTPUT);
-    timer.every(50, checkLdrForWheels);
+    timer.every(20, checkLdrForWheels);
 }
 
 void loop()
@@ -143,6 +168,12 @@ void loop()
     if (bluetooth.available())
     {
         String response = bluetooth.readString();
+        Serial.println(response);
+        handleBluetoothCommands(response);
+    }
+    if (Serial.available())
+    {
+        String response = Serial.readString();
         Serial.println(response);
         handleBluetoothCommands(response);
     }
